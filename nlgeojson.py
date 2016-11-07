@@ -1,17 +1,27 @@
 import numpy as np
 import geohash
+import json
+import itertools
+import time
+import pandas as pd
 
 # makes the cordinates for each set of pointss
-def make_coord(data):
+def make_coord(data,latlongheaders):
 	ind1 = False
 	ind2 = False
-	for row in data.columns.values.tolist():
-		if 'lat' in str(row).lower() and ind1 == False:
-			ind1 = True
-			latheader = row
-		if 'long' in str(row).lower() and ind2 == False:
-			ind2 = True
-			longheader = row
+	if latlongheaders == False:
+		for row in data.columns.values.tolist():
+			if 'lat' in str(row).lower() and ind1 == False:
+				ind1 = True
+				latheader = row
+			if 'long' in str(row).lower() and ind2 == False:
+				ind2 = True
+				longheader = row
+			if 'lng' == str(row):
+				ind2 = True
+				longheader = row
+	else:
+		latheader,longheader = latlongheaders
 	data['coord'] = '[' + data[longheader].astype(str) + ', ' + data[latheader].astype(str) + ']'
 	return data
 
@@ -77,6 +87,21 @@ def stringify_blocks(coords):
 
 # decodes each geohash forms an alignment
 # and stringifies the correndents in one op
+def get_alignment_geohash_bounds(ghash):
+	lat,long,latdelta,longdelta = geohash.decode_exactly(ghash)
+	p1 = [long-longdelta,lat-latdelta] # ll
+	p2 = [long-longdelta,lat+latdelta] # ul
+	p3 = [long+longdelta,lat+latdelta] # ur
+	p4 = [long+longdelta,lat-latdelta] # lr
+	coords = [p1,p2,p3,p4,p1]
+	extrema_bounds = {'n':lat+latdelta,'s':lat-latdelta,'e':long+longdelta,'w':long-longdelta}
+	boundslist = [[extrema_bounds['w'],extrema_bounds['n']],[extrema_bounds['e'],extrema_bounds['s']]]
+	boundslist = stringify(boundslist)
+	coords = '[' + stringify(coords) + ']'
+	return coords,boundslist
+
+# decodes each geohash forms an alignment
+# and stringifies the correndents in one op
 def get_alignment_geohash(ghash):
 	lat,long,latdelta,longdelta = geohash.decode_exactly(ghash)
 	p1 = [long-longdelta,lat-latdelta] # ll
@@ -84,20 +109,292 @@ def get_alignment_geohash(ghash):
 	p3 = [long+longdelta,lat+latdelta] # ur
 	p4 = [long+longdelta,lat-latdelta] # lr
 	coords = [p1,p2,p3,p4,p1]
-	return stringify(coords) 
+	return '[' + stringify(coords) + ']'
+
+def get_alignment_cardinals(data):
+	newlist = []
+	for n,s,e,w in data[['NORTH','SOUTH','EAST','WEST']].values.tolist():
+		p1 = [w,s] # ll
+		p2 = [w,n] # ul
+		p3 = [e,n] # ur
+		p4 = [e,s] # lr
+		coords = [p1,p2,p3,p4,p1]
+		coords = '[' + stringify(coords) + ']'
+		newlist.append(coords)
+	data['COORDS'] = newlist
+	return data
+
+def get_header_without(header,latheader,longheader):
+	newlist = []
+	for row in header:
+		if not row == latheader and not row == longheader and not row == 'COMB':
+			newlist.append(row)
+	return newlist
+
+
+
+# getting coord field for one line in dataframe
+# used for make_line	
+def get_cord_one_line(data,latheader,longheader):
+	# getting the combined field
+	data['COMB'] = '[' + data[longheader].astype(str) + ',' + data[latheader].astype(str) + ']'
+	
+	# getting extrema values
+	north,south,east,west = data[latheader].max(),data[latheader].min(),data[longheader].max(),data[longheader].min()
+	extrema_bounds = {'n':north,'s':south,'e':east,'w':west}
+
+
+	# getting bounds list
+	boundslist = [[extrema_bounds['w'],extrema_bounds['n']],[extrema_bounds['e'],extrema_bounds['s']]]
+	boundslist = stringify(boundslist)
+
+	# getting coords
+	coords = ', '.join(data['COMB'].values.tolist())
+	coords = '[%s]' % coords
+
+	# slicing the first row and adding coords field
+	newheader = get_header_without(data.columns.values.tolist(),latheader,longheader)
+	data = data[newheader]
+	data = data[:1]
+	data['coords'] = coords
+	data['bounds'] = boundslist
+	return data
+
+
+# analyzes each column in a dataframe header
+def analyze_fields(columns):
+	count = 0
+	zoombool = False
+	headerdict = {}
+	optionsdict = {}
+	properties = []
+	newcolumns = []
+	positionbool = False
+	startval = 0
+	endval = 0
+	bounds = False
+	for row in columns:
+		usedbool = False
+		compressedrow = row
+		if 'lat' in str(row).lower():
+			latheader = compressedrow
+			optionsdict['latitude'] = latheader
+			usedbool = True
+			if positionbool == False:
+				startval = count
+				positionbool = True
+			else:
+				endval == count
+		elif 'long' in str(row).lower():
+			longheader = compressedrow
+			usedbool = True
+			optionsdict['longitude'] = longheader 
+			if positionbool == False:
+				startval = count
+				positionbool = True
+			else:
+				endval = count
+		elif 'st_asewkt' in str(row).lower() or 'coords' in str(row).lower():
+			geomheader = compressedrow
+			optionsdict['geometry'] = compressedrow
+			usedbool = True		
+		elif 'colorkey' in str(row).lower() or str(row).lower() == 'color':
+			colorkeyheader = compressedrow
+			optionsdict['color'] = compressedrow
+		elif 'zoomkey' in str(row).lower():
+			if zoombool == False:
+				zoombool = True
+				zoomkey1 = compressedrow
+			else:
+				zoomkey2 = compressedrow
+				optionsdict['zooms'] = [zoomkey1,zoomkey2]	
+		elif 'weight' in str(row).lower():
+			weightheader = compressedrow
+			optionsdict['weight'] = compressedrow 
+		elif 'opacity' in str(row).lower():
+			opacityheader = compressedrow
+			optionsdict['opacity'] = compressedrow 
+		elif 'radius' in str(row).lower():
+			radiusheader = compressedrow
+			optionsdict['radius'] = compressedrow 
+		elif 'bounds' in str(row).lower():
+			boundsheader = compressedrow
+			optionsdict['bounds'] = compressedrow
+
+		# adding entry to dictionary
+		headerdict[compressedrow] = row
+
+		if usedbool == False:
+			properties.append(compressedrow)
+
+		count += 1
+
+		newcolumns.append(compressedrow)
+
+	return headerdict,properties,newcolumns,optionsdict,[startval,endval]
+
+
+# analyzes the type of geojson being constructed then returns adequate geometry
+def analyze_type(optionsdict,geompositions,newcolumns,type):
+
+	if type == 'line':
+		latitude,longitude = optionsdict['latitude'],optionsdict['longitude']
+		geoms = [longitude,latitude]	
+	elif type == 'postgis_lines' or type == 'postgis_polygons':	
+		geoms =['coords']
+		#geoms = [optionsdict['geometry']]
+	elif type == 'polygon':
+		latitude,longitude = optionsdict['latitude'],optionsdict['longitude']
+		geoms = [longitude,latitude]
+	elif type == 'blocks':
+		geoms = newcolumns[geompositions[0]:geompositions[1]+1]
+	elif type == 'points':
+		latitude,longitude = optionsdict['latitude'],optionsdict['longitude']
+		geoms = [longitude,latitude]
+
+	newdict = {}
+	ind = 0
+	# adding optionkeys
+	for row in optionsdict.keys():
+		if not row == 'latitude' and not row == 'longitude' and not row == 'geometry':
+			newdict[row] = optionsdict[row]
+	# adding zoom key
+	if ind == 2:
+		newdict['zooms'] = [zoomkey1,zoomkey2]
+	return geoms,newdict
+
+# gets a bound from data that will be written into 
+# mask file
+def get_first_bounds(data,type):
+	if type == 'lines' or type == 'line':
+		bounds = data['coords'][:1].values.tolist()
+		bounds = bounds[0]
+		bounds = bounds[1:-1]
+		bounds = bounds.encode('utf-8')
+		bounds = str.split(bounds,'],')[0]
+		bounds = bounds[1:]
+		long,lat = str.split(bounds,',')
+		long,lat = float(long),float(lat)
+		return [long,lat]
+	if type == 'points':
+		bounds = data['coord'][:1].values.tolist()[0]
+		long,lat = str.split(bounds[1:-1],',')
+		long,lat = float(long),float(lat)
+		return [long,lat]
+	if type == 'blocks':
+		try:
+			ghash = data['GEOHASH'][:1].values.tolist()[0]
+			lat,long = geohash.decode(ghash)
+		except:
+			lat,long = data[['NORTH','EAST']][:1].values.tolist()[0]
+		return [long,lat]
+
+# sniffs each dataframe header and the type and constructs
+# a mask file that can be used with pipeleaflet
+# this mask file carries over style and formats without inputs
+# on the pipeleaflet end
+def sniff_mask_fields(data,type,filename,firstbound):
+	# getting columns
+	columns = data.columns.values.tolist()
+
+	# getting all values used in logic intereptation
+	headerdict,properties,newcolumns,optionsdict,geompositions = analyze_fields(columns)
+
+	# analyzing the options dictionary for each type
+	geoms,optionsdict = analyze_type(optionsdict,geompositions,newcolumns,type)
+
+	propertydict = {}
+	for row in properties:
+		propertydict[headerdict[row]] = row
+	alignpos = 0
+	geompos = 0
+
+	# analyzing type if type is postgis lines
+	if type == 'postgis_lines' or type == 'postgis_polygons':
+		count = 0
+		newpropertydict = {}
+		for row in data.columns:
+			if row == 'geom':
+				geompos = count
+			elif row == 'st_asewkt':
+				alignpos = count
+			elif row == 'coords':
+				geompos,alignpos = count,count
+			else:
+				newpropertydict[str(row)] = str(row)
+			count += 1
+		newgeom = [geoms[0],[geompos,alignpos]]
+		geoms = newgeom
+		propertydict = newpropertydict
+
+	# adding firstbounds to options dict
+	optionsdict['firstbound'] = firstbound
+
+	propertydict['options'] = optionsdict
+	if type == 'points':
+		maskjson = {"geometry": {"type": "Point", "coordinates": []}, "type": "Feature", "properties": propertydict}
+	elif type == 'postgis_lines':
+		maskjson = {"geometry": {"type": "LineString", "coordinates": []}, "type": "Feature", "properties": propertydict}
+	elif type == 'postgis_polygons':
+		maskjson = {"geometry": {"type": "Polygon", "coordinates": []}, "type": "Feature", "properties": propertydict}
+	elif type == 'blocks':
+		maskjson = {"geometry": {"type": "Polygon", "coordinates": []}, "type": "Feature", "properties": propertydict}
+	elif type == 'line':
+		maskjson = {"geometry": {"type": "LineString", "coordinates": []}, "type": "Feature", "properties": propertydict}
+	elif type == 'polygon':
+		maskjson = {"geometry": {"type": "Polygon", "coordinates": []}, "type": "Feature", "properties": propertydict}
+	
+	filename = str.split(str(filename),'.')[0]
+	filename = filename + '.json'
+
+	with open(filename,'wb') as newgeojson:
+		json.dump(maskjson,newgeojson)
+	print 'Wrote %s to json.' % filename
+
+	data.columns = newcolumns
+	
+	return data,geoms
 
 
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
-def make_blocks(data,filename):
+def make_blocks(data,filename,**kwargs):
+	mask = False
+	bounds = False
+	cardinals = False
+	for key,value in kwargs.iteritems():
+		if key == 'mask':
+			mask = value
+		if key == 'bounds':
+			bounds = value
+
+	# testing for north east, south cardinal directonals
+	for row in data.columns.values.tolist():
+		if str(row).lower() == 'north':
+			cardinals = True
+
+
+
+	# filling in missing data
 	data = data.fillna(value = 0)
-	data['COORDS'] = data['GEOHASH'].map(get_alignment)
+	# logic for if bounds is equal to true
+	if bounds == True:
+		holder = pd.DataFrame(holder.values.tolist(),columns=['COORDS','bounds'])
+		data[['COORDS','bounds']] = holder[['COORDS','bounds']]
+		data['bounds'] = '@bounds@' + data['bounds'] + '@bounds@'
+	else:
+		if cardinals == True:
+			data = get_alignment_cardinals(data)
+		else:
+			data['COORDS'] = data['GEOHASH'].map(get_alignment_geohash)
 
 	newheaders = []
 	# removing fields that don't matter
 	for row in data.columns.values.tolist():
 		if not row == 'geom' and not row == 'COORDS' and not 'st_asewkt' == row:
-			newheaders.append(row)
+			if not 'north' in str(row).lower() and not 'south' in str(row).lower():
+				if not 'west' in str(row).lower() and not 'east' in str(row).lower():
+					newheaders.append(row)
 
 	#bl.make_postgis_lines(data[:10],'lines.geojson')
 
@@ -105,13 +402,12 @@ def make_blocks(data,filename):
 	properties = str.split(properties,'},')
 	coords = data['COORDS'].values.tolist()
 
-	args = zip(coords,properties)
 	newlist = []
 	count = 0
-	for coord,props in args:
+	for coord,props in itertools.izip(coords,properties):
 		if count == 0:
 			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
-		elif count == len(args)-1:
+		elif count == len(properties)-1:
 			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[:-1])
 		else:
 			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
@@ -124,35 +420,71 @@ def make_blocks(data,filename):
 	total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
 
 
+	# replacing thte bounds signitaures made earlier
+	if bounds == True:
+		total = total.replace('"@bounds@','')
+		total = total.replace('@bounds@"','')
+
 	with open(filename,'wb') as f:
 		f.write(total)
-	print 'Wrote %s filename to csv file.' % filename
+	print 'Wrote %s filename to geojson file.' % filename
 
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'blocks')		
+		sniff_mask_fields(data,'blocks',filename,firstbounds)
+	
 
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
-def make_lines(data,filename):
+def make_lines(data,filename,**kwargs):
+	mask = False
+	boundsbool = False
+	linebool = False
+	for key,value in kwargs.iteritems():
+		if 'mask' == key:
+			mask = value
+		if 'linebool' == key:
+			linebool = value
+
+	# checking for the bounds bool
+	for row in data.columns.values.tolist():
+		if row == 'bounds':
+			boundsbool = True
+
+	# adding mask to bounds bool so it can be replace later
+	if boundsbool == True:
+		data['bounds'] = '@bounds@' + data['bounds'] + '@bounds@'
+	# fill all missing data in dataframe
 	data = data.fillna(value = 0)
 
 	newheaders = []
+	stbool = False
+	coordsbool = False
 	# removing fields that don't matter
 	for row in data.columns.values.tolist():
-		if not row == 'geom' and not row == 'COORDS' and not 'st_asewkt' == row:
+		if not row == 'geom' and not row == 'coords' and not 'st_asewkt' == row:
 			newheaders.append(row)
+		if row == 'coords':
+			coordsbool = True
+		if row == 'st_asewkt':
+			stbool = True
 
 	#bl.make_postgis_lines(data[:10],'lines.geojson')
 
 	properties = data[newheaders].to_json(orient='records')
 	properties = str.split(properties,'},')
-	coords = data['coords'].values.tolist()
+	if coordsbool == True:
+		coords = data['coords'].values.tolist()
+	elif coordsbool == False and stbool == True:
+		coords = get_aligns(data)
 
-	args = zip(coords,properties)
 	newlist = []
 	count = 0
-	for coord,props in args:
+	for coord,props in itertools.izip(coords,properties):
 		if count == 0:
 			line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
-		elif count == len(args)-1:
+		elif count == len(properties)-1:
 			line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[:-1])
 		else:
 			line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
@@ -163,27 +495,84 @@ def make_lines(data,filename):
 	middle = ', '.join(newlist)
 	total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
 
+	# replacing thte bounds signitaures made earlier
+	if boundsbool == True:
+		total = total.replace('"@bounds@','')
+		total = total.replace('@bounds@"','')
+
+	# logic for if line is true
+	if linebool == True:
+		return total[:-6]
+
 	with open(filename,'wb') as f:
 		f.write(total)
-	print 'Wrote %s filename to csv file.' % filename
+	print 'Wrote %s filename to geojson file.' % filename
 
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'lines')
+		sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
+
+# makes a line using 'lat' and 'long' fields
+def make_line(data,filename,**kwargs):
+	mask = False
+	for key,value in kwargs.iteritems():
+		if 'mask' == key:
+			mask = value
+
+	# getting lat and long header respectively
+	for row in data.columns.values.tolist():
+		if 'lat' in str(row).lower():	
+			latheader = row
+		if 'long' in str(row).lower():	
+			longheader = row
+
+	# adding the cord field and slicing the size to 1
+	# this assumes all fields are duplicate which they should be anyway
+	data = get_cord_one_line(data,latheader,longheader)
+	total = make_lines(data,filename,linebool=True)
+	total = total + '}}]}'
+
+	with open(filename,'wb') as f:
+		f.write(total)
+	print 'Wrote %s filename to geojson file.' % filename
+
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'line')		
+		sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
 
 # makes points using text sequences
-def make_points(data,filename):
+def make_points(data,filename,**kwargs):
+	mask = False
+	latlongheaders = False
+	bounds = False
+	for key,value in kwargs.iteritems():
+		if key == 'mask':
+			mask = value
+		if key == 'latlongheaders':
+			latlongheaders = value
+		if key == 'bounds':
+			bounds = value
+
+	# filling in all missing data in df
 	data = data.fillna(value=0)
 
-	data = make_coord(data)
+	data = make_coord(data,latlongheaders)
+	if bounds == True:
+		data['bounds'] = '/bounds/' + data['coord'] + '/bounds/'
+
+
 	coords = data['coord'].values.tolist()
 	properties = str(data.to_json(orient='records')).replace('\/','/')
 	properties = str.split(properties[1:-1],'},')
-	args = zip(coords,properties)
 	newlist = []
 	count = 0
-	for coord,props in args:
+	for coord,props in itertools.izip(coords,properties):
 		if count == 0:
-			pointline = '''{"geometry": {"type": "Point", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
+			pointline = '''{"geometry": {"type": "Point", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
 			#line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
-		elif count == len(args)-1:
+		elif count == len(properties)-1:
 			pointline = '''{"geometry": {"type": "Point", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props)		
 			#line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[:-1])
 		else:
@@ -199,8 +588,22 @@ def make_points(data,filename):
 	middle = ', '.join(newlist)
 
 	total = start + middle + ']}' 
-	total = total[:152] + '{' + total[152:]
+
+	if bounds == True:
+		total = total.replace('"/bounds/','')
+		total = total.replace('/bounds/"','')
+
+
 	with open(filename,'w') as f:
 		f.write(total)
 	print 'Wrote geojson file to %s.' % filename
+	
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'points')		
+		sniff_mask_fields(data,'points',filename,firstbounds)
 
+#make_blocks(data,'blocks.geojson',mask=True)
+
+
+	
