@@ -265,7 +265,7 @@ def analyze_type(optionsdict,geompositions,newcolumns,type):
 
 # gets a bound from data that will be written into 
 # mask file
-def get_first_bounds(data,type):
+def get_first_bounds(data,type,pipegl=False):
 	if type == 'lines' or type == 'line':
 		bounds = data['coords'][:1].values.tolist()
 		bounds = bounds[0]
@@ -277,9 +277,13 @@ def get_first_bounds(data,type):
 		long,lat = float(long),float(lat)
 		return [long,lat]
 	if type == 'points':
-		bounds = data['coord'][:1].values.tolist()[0]
-		long,lat = str.split(bounds[1:-1],',')
-		long,lat = float(long),float(lat)
+		if pipegl == True:
+			long = data['LONG'][:1].values.tolist()[0]
+			lat = data['LAT'][:1].values.tolist()[0]
+		else:
+			bounds = data['coord'][:1].values.tolist()[0]
+			long,lat = str.split(bounds[1:-1],',')
+			long,lat = float(long),float(lat)
 		return [long,lat]
 	if type == 'blocks':
 		try:
@@ -288,6 +292,14 @@ def get_first_bounds(data,type):
 		except:
 			lat,long = data[['NORTH','EAST']][:1].values.tolist()[0]
 		return [long,lat]
+	if type == 'polygons':
+		bounds = data.iloc[0]['COORDS']
+		bounds = bounds[2:-2]
+		bounds = str.split(bounds,'],[')
+		long,lat = str.split(bounds[0][1:],',')
+		long,lat = 	float(long),float(lat)
+		return long,lat
+
 
 # sniffs each dataframe header and the type and constructs
 # a mask file that can be used with pipeleaflet
@@ -355,10 +367,45 @@ def sniff_mask_fields(data,type,filename,firstbound):
 	
 	return data,geoms
 
+# creates a polygon dataframe ready to be used by nlgeojson
+def create_polygon_dataframe(data,idfield='AREA'):
+	# creating dummy datafrrame
+	dummydf = pd.DataFrame(data.COORDS.str.split('|').tolist(), index=data.AREA).stack()
+	dummydf = dummydf.reset_index()
+	dummydf = dummydf[['AREA',0]]
+	dummydf.columns = ['AREA','COORDS']
+
+	# setting the index and slicing correct data
+	data = data.set_index(idfield)
+	data = data.drop('COORDS',axis=1).loc[dummydf.AREA.values]
+
+	# setting the values from the index and dropping the index
+	dummydf[data.columns] = data.reset_index().drop('AREA',axis=1)
+
+	return dummydf
 
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
 def make_blocks(data,filename,**kwargs):
+	""" Creates and writes blocks geojson from either geohashs or extrema columns.
+	(SEE NOTES.)
+
+	Args:
+		data: a dataframe with a properly configured coords column (SEE NOTES)
+		filename: the filename of either geojson or kml filetype
+		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
+
+	Returns:
+		Writes a geojson file to disk
+
+	NOTES: This function accepts two types of input column(s). Either a 'GEOHASH' column
+	which will decode your square within the function. Or having the fields:
+	'NORTH','SOUTH','EAST','WEST' in your dataframe is also acceptable.
+ 	"""
+	# lazy
+	if filename == '':
+		filename = 'blocks.geojson'
+
 	mask = False
 	bounds = False
 	cardinals = False
@@ -438,6 +485,25 @@ def make_blocks(data,filename,**kwargs):
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
 def make_lines(data,filename,**kwargs):
+	""" Creates and writes lines geojson from a postgis / coords table.
+	(SEE NOTES.)
+
+	Args:
+		data: a dataframe with a properly configured coords column (SEE NOTES)
+		filename: the filename of either geojson or kml filetype
+		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
+
+	Returns:
+		Writes a geojson file to disk
+
+	NOTES: This function uses the coords column or a column using postgis st_asewkt function as
+	your column title to extract coordinates for just place them in cleanly if your coordinates are already in
+	[[x1,y1],[x2,y2]] format within a string.
+ 	"""
+	# lazy
+	if filename == '':
+		filename = 'lines.geojson'
+
 	mask = False
 	boundsbool = False
 	linebool = False
@@ -470,7 +536,6 @@ def make_lines(data,filename,**kwargs):
 		if row == 'st_asewkt':
 			stbool = True
 
-	#bl.make_postgis_lines(data[:10],'lines.geojson')
 
 	properties = data[newheaders].to_json(orient='records')
 	properties = str.split(properties,'},')
@@ -515,6 +580,20 @@ def make_lines(data,filename,**kwargs):
 
 # makes a line using 'lat' and 'long' fields
 def make_line(data,filename,**kwargs):
+	""" Creates and writes line geojson from either geohashs or extrema columns.
+	(SEE NOTES.)
+
+	Args:
+		data: a dataframe with a properly configured lat/long fields (SEE NOTES)
+		filename: the filename of either geojson or kml filetype
+		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
+
+	Returns:
+		Writes a geojson file to disk
+
+	NOTES: This function creates a single line from the LAT / LONG fields and carries
+	repeated fields into the geojson.
+ 	"""
 	mask = False
 	for key,value in kwargs.iteritems():
 		if 'mask' == key:
@@ -544,6 +623,23 @@ def make_line(data,filename,**kwargs):
 
 # makes points using text sequences
 def make_points(data,filename,**kwargs):
+	""" Creates and writes points geojson from LAT and LONG FIELDS.
+	(SEE NOTES.)
+
+	Args:
+		data: a dataframe with a properly configured lat/long column (SEE NOTES)
+		filename: the filename of either geojson or kml filetype
+		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
+
+	Returns:
+		Writes a geojson file to disk
+
+	NOTES: This function searches each column header for fields that look 'LAT' or
+	'LONG' respectively to create a point from the dataframe input.
+ 	"""
+	# lazy
+	if filename == '':
+		filename = 'points.geojson'
 	mask = False
 	latlongheaders = False
 	bounds = False
@@ -603,7 +699,110 @@ def make_points(data,filename,**kwargs):
 		firstbounds = get_first_bounds(data,'points')		
 		sniff_mask_fields(data,'points',filename,firstbounds)
 
-#make_blocks(data,'blocks.geojson',mask=True)
+
+
+# given a dataframe containg the geometry coords 
+# writes a geojson file out from text
+def make_polygons(data,filename,**kwargs):
+	""" Creates and writes polygonstring for geojson from a polygon flat table.
+	(SEE NOTES.)
+
+	Args:
+		data: a dataframe with a properly configured coords column (SEE NOTES)
+		filename: the filename of either geojson or kml filetype
+		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
+
+	Returns:
+		Writes a geojson file to disk
+
+	NOTES: This function accepts a flat dataframe output from polygon index
+	which has a column configured like normal geojson coordinates as a stringify
+	but instead of configuring as a multipolygon uses '|' in the coordstirng to denote a newlist
+	polygon area this abstraction allows for polygon usage and know need for a make_multipolygon()
+	function when it really doesn't do much.
+	"""
+	# lazy
+	if filename == '':
+		filename = 'polygons.geojson'
+
+
+	mask = False
+	boundsbool = False
+	linebool = False
+	for key,value in kwargs.iteritems():
+		if 'mask' == key:
+			mask = value
+		if 'linebool' == key:
+			linebool = value
+
+	# creating polygon dataframe
+	data = create_polygon_dataframe(data)
+
+
+	# checking for the bounds bool
+	for row in data.columns.values.tolist():
+		if row == 'bounds':
+			boundsbool = True
+
+	# adding mask to bounds bool so it can be replace later
+	if boundsbool == True:
+		data['bounds'] = '@bounds@' + data['bounds'] + '@bounds@'
+	# fill all missing data in dataframe
+	data = data.fillna(value = 0)
+
+	newheaders = []
+	stbool = False
+	coordsbool = False
+	# removing fields that don't matter
+	for row in data.columns.values.tolist():
+		rowtest = str(row).lower()
+		if not rowtest == 'geom' and not rowtest == 'coords' and not 'st_asewkt' == rowtest:
+			newheaders.append(row)
+		if rowtest == 'coords':
+			coordsbool = True
+		if rowtest == 'st_asewkt':
+			stbool = True
+
+	properties = data[newheaders].to_json(orient='records')
+	properties = str.split(properties,'},')
+	if coordsbool == True:
+		coords = data['COORDS'].values.tolist()
+
+
+	newlist = []
+	count = 0
+	for coord,props in itertools.izip(coords,properties):
+		if count == 0:
+			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
+		elif count == len(properties)-1:
+			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[:-1])
+		else:
+			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
+
+		count += 1
+		newlist.append(line)
+
+	middle = ', '.join(newlist)
+	total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
+
+
+	# logic for if line is true
+	if linebool == True:
+		return total[:-6]
+
+	# replacing thte bounds signitaures made earlier
+	if boundsbool == True:
+		total = total.replace('"@bounds@','')
+		total = total.replace('@bounds@"','')
+
+	with open(filename,'wb') as f:
+		f.write(total)
+	print 'Wrote %s filename to geojson file.' % filename
+
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'polygons')
+		sniff_mask_fields(data,'postgis_polygons',filename,firstbounds)
 
 
 	

@@ -265,7 +265,7 @@ def analyze_type(optionsdict,geompositions,newcolumns,type):
 
 # gets a bound from data that will be written into 
 # mask file
-def get_first_bounds(data,type):
+def get_first_bounds(data,type,pipegl=False):
 	if type == 'lines' or type == 'line':
 		bounds = data['coords'][:1].values.tolist()
 		bounds = bounds[0]
@@ -277,9 +277,13 @@ def get_first_bounds(data,type):
 		long,lat = float(long),float(lat)
 		return [long,lat]
 	if type == 'points':
-		bounds = data['coord'][:1].values.tolist()[0]
-		long,lat = str.split(bounds[1:-1],',')
-		long,lat = float(long),float(lat)
+		if pipegl == True:
+			long = data['LONG'][:1].values.tolist()[0]
+			lat = data['LAT'][:1].values.tolist()[0]
+		else:
+			bounds = data['coord'][:1].values.tolist()[0]
+			long,lat = str.split(bounds[1:-1],',')
+			long,lat = float(long),float(lat)
 		return [long,lat]
 	if type == 'blocks':
 		try:
@@ -359,6 +363,10 @@ def sniff_mask_fields(data,type,filename,firstbound):
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
 def make_blocks(data,filename,**kwargs):
+	# lazy
+	if filename == '':
+		filename = 'blocks.geojson'
+
 	mask = False
 	bounds = False
 	cardinals = False
@@ -438,6 +446,10 @@ def make_blocks(data,filename,**kwargs):
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
 def make_lines(data,filename,**kwargs):
+	# lazy
+	if filename == '':
+		filename = 'lines.geojson'
+
 	mask = False
 	boundsbool = False
 	linebool = False
@@ -544,6 +556,9 @@ def make_line(data,filename,**kwargs):
 
 # makes points using text sequences
 def make_points(data,filename,**kwargs):
+	# lazy
+	if filename == '':
+		filename = 'points.geojson'
 	mask = False
 	latlongheaders = False
 	bounds = False
@@ -603,7 +618,6 @@ def make_points(data,filename,**kwargs):
 		firstbounds = get_first_bounds(data,'points')		
 		sniff_mask_fields(data,'points',filename,firstbounds)
 
-#make_blocks(data,'blocks.geojson',mask=True)
 
 
 	
