@@ -3,7 +3,7 @@
 
 Basically this module mimics a lot of the functionality of one of my older modules but its a tenth of size and the complexity as well orders of magnitudes faster.
 
-### Please take a look at this [ipynb](https://github.com/murphy214/nlgeojson/blob/master/demo.ipynb) for the performence advantages and the unique syntax it uses.
+## Please take a look at this [ipynb](https://github.com/murphy214/nlgeojson/blob/master/demo.ipynb) for the performance advantages and the unique syntax it uses.
 
 
 
