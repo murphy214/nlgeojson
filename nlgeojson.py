@@ -298,7 +298,7 @@ def get_first_bounds(data,type,pipegl=False):
 		bounds = str.split(bounds,'],[')
 		long,lat = str.split(bounds[0][1:],',')
 		long,lat = 	float(long),float(lat)
-		return long,lat
+		return [long,lat]
 
 
 # sniffs each dataframe header and the type and constructs
@@ -734,6 +734,9 @@ def make_polygons(data,filename,**kwargs):
 			mask = value
 		if 'linebool' == key:
 			linebool = value
+
+	# converting string to utf-8 if not already
+	data['COORDS'] = data['COORDS'].str.encode('utf-8')
 
 	# creating polygon dataframe
 	data = create_polygon_dataframe(data)
