@@ -6,7 +6,7 @@ import time
 import pandas as pd
 
 # makes the cordinates for each set of pointss
-def make_coord(data,latlongheaders):
+def _make_coord(data,latlongheaders):
 	ind1 = False
 	ind2 = False
 	if latlongheaders == False:
@@ -28,7 +28,7 @@ def make_coord(data,latlongheaders):
 # extracting the raw coords from postgis output
 # this is used to get the stringified cords
 # and ultimately is updated as field in postgres
-def get_coordstring(geometry):
+def _get_coordstring(geometry):
 	# parsing through the text geometry to yield what will be rows
 	try:
 		geometry=str.split(geometry,'(')
@@ -57,20 +57,20 @@ def get_coordstring(geometry):
 	return coords
 
 # sringify the output of a line segment
-def stringify(coords):
+def _stringify(coords):
 	newlist = []
 	for long,lat in coords:
 		newlist.append('[%s, %s]' % (long,lat))
 	return '[' + ', '.join(newlist) + ']'
 
 # get aligns for lines
-def get_aligns(data):
+def _get_aligns(data):
 	total = []
 	for row in data['st_asewkt'].values.tolist():
-		coords = get_coordstring(row)
+		coords = _get_coordstring(row)
 
 		if isinstance(coords,list):
-			coords = stringify(coords)
+			coords = _stringify(coords)
 		else:
 			coords = '[0,0]'
 		total.append(coords)
@@ -78,7 +78,7 @@ def get_aligns(data):
 
 # stringifies the block geometry that will be 
 # used to create the blocks cords
-def stringify_blocks(coords):
+def _stringify_blocks(coords):
 	newlist = []
 	for long,lat in coords:
 		newlist.append('[%s, %s]' % (long,lat))
@@ -87,7 +87,7 @@ def stringify_blocks(coords):
 
 # decodes each geohash forms an alignment
 # and stringifies the correndents in one op
-def get_alignment_geohash_bounds(ghash):
+def __get_alignment_geohash_bounds(ghash):
 	lat,long,latdelta,longdelta = geohash.decode_exactly(ghash)
 	p1 = [long-longdelta,lat-latdelta] # ll
 	p2 = [long-longdelta,lat+latdelta] # ul
@@ -96,22 +96,22 @@ def get_alignment_geohash_bounds(ghash):
 	coords = [p1,p2,p3,p4,p1]
 	extrema_bounds = {'n':lat+latdelta,'s':lat-latdelta,'e':long+longdelta,'w':long-longdelta}
 	boundslist = [[extrema_bounds['w'],extrema_bounds['n']],[extrema_bounds['e'],extrema_bounds['s']]]
-	boundslist = stringify(boundslist)
-	coords = '[' + stringify(coords) + ']'
+	boundslist = _stringify(boundslist)
+	coords = '[' + _stringify(coords) + ']'
 	return coords,boundslist
 
 # decodes each geohash forms an alignment
 # and stringifies the correndents in one op
-def get_alignment_geohash(ghash):
+def _get_alignment_geohash(ghash):
 	lat,long,latdelta,longdelta = geohash.decode_exactly(ghash)
 	p1 = [long-longdelta,lat-latdelta] # ll
 	p2 = [long-longdelta,lat+latdelta] # ul
 	p3 = [long+longdelta,lat+latdelta] # ur
 	p4 = [long+longdelta,lat-latdelta] # lr
 	coords = [p1,p2,p3,p4,p1]
-	return '[' + stringify(coords) + ']'
+	return '[' + _stringify(coords) + ']'
 
-def get_alignment_cardinals(data):
+def _get_alignment_cardinals(data):
 	newlist = []
 	for n,s,e,w in data[['NORTH','SOUTH','EAST','WEST']].values.tolist():
 		p1 = [w,s] # ll
@@ -119,12 +119,12 @@ def get_alignment_cardinals(data):
 		p3 = [e,n] # ur
 		p4 = [e,s] # lr
 		coords = [p1,p2,p3,p4,p1]
-		coords = '[' + stringify(coords) + ']'
+		coords = '[' + _stringify(coords) + ']'
 		newlist.append(coords)
 	data['COORDS'] = newlist
 	return data
 
-def get_header_without(header,latheader,longheader):
+def _get_header_without(header,latheader,longheader):
 	newlist = []
 	for row in header:
 		if not row == latheader and not row == longheader and not row == 'COMB':
@@ -135,7 +135,7 @@ def get_header_without(header,latheader,longheader):
 
 # getting coord field for one line in dataframe
 # used for make_line	
-def get_cord_one_line(data,latheader,longheader):
+def _get_cord_one_line(data,latheader,longheader):
 	# getting the combined field
 	data['COMB'] = '[' + data[longheader].astype(str) + ',' + data[latheader].astype(str) + ']'
 	
@@ -146,14 +146,14 @@ def get_cord_one_line(data,latheader,longheader):
 
 	# getting bounds list
 	boundslist = [[extrema_bounds['w'],extrema_bounds['n']],[extrema_bounds['e'],extrema_bounds['s']]]
-	boundslist = stringify(boundslist)
+	boundslist = _stringify(boundslist)
 
 	# getting coords
 	coords = ', '.join(data['COMB'].values.tolist())
 	coords = '[%s]' % coords
 
 	# slicing the first row and adding coords field
-	newheader = get_header_without(data.columns.values.tolist(),latheader,longheader)
+	newheader = _get_header_without(data.columns.values.tolist(),latheader,longheader)
 	data = data[newheader]
 	data = data[:1]
 	data['coords'] = coords
@@ -162,7 +162,7 @@ def get_cord_one_line(data,latheader,longheader):
 
 
 # analyzes each column in a dataframe header
-def analyze_fields(columns):
+def _analyze_fields(columns):
 	count = 0
 	zoombool = False
 	headerdict = {}
@@ -235,7 +235,7 @@ def analyze_fields(columns):
 
 
 # analyzes the type of geojson being constructed then returns adequate geometry
-def analyze_type(optionsdict,geompositions,newcolumns,type):
+def _analyze_type(optionsdict,geompositions,newcolumns,type):
 
 	if type == 'line':
 		latitude,longitude = optionsdict['latitude'],optionsdict['longitude']
@@ -305,15 +305,15 @@ def get_first_bounds(data,type,pipegl=False):
 # a mask file that can be used with pipeleaflet
 # this mask file carries over style and formats without inputs
 # on the pipeleaflet end
-def sniff_mask_fields(data,type,filename,firstbound):
+def _sniff_mask_fields(data,type,filename,firstbound):
 	# getting columns
 	columns = data.columns.values.tolist()
 
 	# getting all values used in logic intereptation
-	headerdict,properties,newcolumns,optionsdict,geompositions = analyze_fields(columns)
+	headerdict,properties,newcolumns,optionsdict,geompositions = _analyze_fields(columns)
 
 	# analyzing the options dictionary for each type
-	geoms,optionsdict = analyze_type(optionsdict,geompositions,newcolumns,type)
+	geoms,optionsdict = _analyze_type(optionsdict,geompositions,newcolumns,type)
 
 	propertydict = {}
 	for row in properties:
@@ -368,7 +368,7 @@ def sniff_mask_fields(data,type,filename,firstbound):
 	return data,geoms
 
 # creates a polygon dataframe ready to be used by nlgeojson
-def create_polygon_dataframe(data,idfield='AREA'):
+def _create_polygon_dataframe(data,idfield='AREA'):
 	# creating dummy datafrrame
 	dummydf = pd.DataFrame(data.COORDS.str.split('|').tolist(), index=data.AREA).stack()
 	dummydf = dummydf.reset_index()
@@ -409,11 +409,14 @@ def make_blocks(data,filename,**kwargs):
 	mask = False
 	bounds = False
 	cardinals = False
+	test = False
 	for key,value in kwargs.iteritems():
 		if key == 'mask':
 			mask = value
 		if key == 'bounds':
 			bounds = value
+		if 'test' == key:
+			test = value
 
 	# testing for north east, south cardinal directonals
 	for row in data.columns.values.tolist():
@@ -431,9 +434,9 @@ def make_blocks(data,filename,**kwargs):
 		data['bounds'] = '@bounds@' + data['bounds'] + '@bounds@'
 	else:
 		if cardinals == True:
-			data = get_alignment_cardinals(data)
+			data = _get_alignment_cardinals(data)
 		else:
-			data['COORDS'] = data['GEOHASH'].map(get_alignment_geohash)
+			data['COORDS'] = data['GEOHASH'].map(_get_alignment_geohash)
 
 	newheaders = []
 	# removing fields that don't matter
@@ -472,14 +475,17 @@ def make_blocks(data,filename,**kwargs):
 		total = total.replace('"@bounds@','')
 		total = total.replace('@bounds@"','')
 
-	with open(filename,'wb') as f:
-		f.write(total)
-	print 'Wrote %s filename to geojson file.' % filename
+	if test == False:
+		with open(filename,'wb') as f:
+			f.write(total)
+		print 'Wrote %s filename to geojson file.' % filename
+	elif test == True:
+		return total
 
 	# handling if a styling mask will be used
 	if mask == True:
 		firstbounds = get_first_bounds(data,'blocks')		
-		sniff_mask_fields(data,'blocks',filename,firstbounds)
+		_sniff_mask_fields(data,'blocks',filename,firstbounds)
 	
 
 # given a dataframe containg the geometry coords 
@@ -507,11 +513,14 @@ def make_lines(data,filename,**kwargs):
 	mask = False
 	boundsbool = False
 	linebool = False
+	test = False
 	for key,value in kwargs.iteritems():
 		if 'mask' == key:
 			mask = value
 		if 'linebool' == key:
 			linebool = value
+		if 'test' == key:
+			test = value
 
 	# checking for the bounds bool
 	for row in data.columns.values.tolist():
@@ -542,7 +551,7 @@ def make_lines(data,filename,**kwargs):
 	if coordsbool == True:
 		coords = data['coords'].values.tolist()
 	elif coordsbool == False and stbool == True:
-		coords = get_aligns(data)
+		coords = _get_aligns(data)
 
 	newlist = []
 	count = 0
@@ -569,14 +578,17 @@ def make_lines(data,filename,**kwargs):
 	if linebool == True:
 		return total[:-6]
 
-	with open(filename,'wb') as f:
-		f.write(total)
-	print 'Wrote %s filename to geojson file.' % filename
+	if test == False:
+		with open(filename,'wb') as f:
+			f.write(total)
+		print 'Wrote %s filename to geojson file.' % filename
+	elif test == True:
+		return total
 
 	# handling if a styling mask will be used
 	if mask == True:
 		firstbounds = get_first_bounds(data,'lines')
-		sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
+		_sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
 
 # makes a line using 'lat' and 'long' fields
 def make_line(data,filename,**kwargs):
@@ -595,9 +607,12 @@ def make_line(data,filename,**kwargs):
 	repeated fields into the geojson.
  	"""
 	mask = False
+	test = False
 	for key,value in kwargs.iteritems():
 		if 'mask' == key:
 			mask = value
+		if 'test' == key:
+			test = value
 
 	# getting lat and long header respectively
 	for row in data.columns.values.tolist():
@@ -608,18 +623,21 @@ def make_line(data,filename,**kwargs):
 
 	# adding the cord field and slicing the size to 1
 	# this assumes all fields are duplicate which they should be anyway
-	data = get_cord_one_line(data,latheader,longheader)
+	data = _get_cord_one_line(data,latheader,longheader)
 	total = make_lines(data,filename,linebool=True)
 	total = total + '}}]}'
 
-	with open(filename,'wb') as f:
-		f.write(total)
-	print 'Wrote %s filename to geojson file.' % filename
+	if test == False:
+		with open(filename,'wb') as f:
+			f.write(total)
+		print 'Wrote %s filename to geojson file.' % filename
+	elif test == True:
+		return total
 
 	# handling if a styling mask will be used
 	if mask == True:
 		firstbounds = get_first_bounds(data,'line')		
-		sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
+		_sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
 
 # makes points using text sequences
 def make_points(data,filename,**kwargs):
@@ -643,6 +661,7 @@ def make_points(data,filename,**kwargs):
 	mask = False
 	latlongheaders = False
 	bounds = False
+	test = False
 	for key,value in kwargs.iteritems():
 		if key == 'mask':
 			mask = value
@@ -650,11 +669,13 @@ def make_points(data,filename,**kwargs):
 			latlongheaders = value
 		if key == 'bounds':
 			bounds = value
+		if 'test' == key:
+			test = value
 
 	# filling in all missing data in df
 	data = data.fillna(value=0)
 
-	data = make_coord(data,latlongheaders)
+	data = _make_coord(data,latlongheaders)
 	if bounds == True:
 		data['bounds'] = '/bounds/' + data['coord'] + '/bounds/'
 
@@ -689,15 +710,17 @@ def make_points(data,filename,**kwargs):
 		total = total.replace('"/bounds/','')
 		total = total.replace('/bounds/"','')
 
+	if test == False:
+		with open(filename,'wb') as f:
+			f.write(total)
+		print 'Wrote %s filename to geojson file.' % filename
+	elif test == True:
+		return total
 
-	with open(filename,'w') as f:
-		f.write(total)
-	print 'Wrote geojson file to %s.' % filename
-	
 	# handling if a styling mask will be used
 	if mask == True:
 		firstbounds = get_first_bounds(data,'points')		
-		sniff_mask_fields(data,'points',filename,firstbounds)
+		_sniff_mask_fields(data,'points',filename,firstbounds)
 
 
 
@@ -716,7 +739,7 @@ def make_polygons(data,filename,**kwargs):
 		Writes a geojson file to disk
 
 	NOTES: This function accepts a flat dataframe output from polygon index
-	which has a column configured like normal geojson coordinates as a stringify
+	which has a column configured like normal geojson coordinates as a _stringify
 	but instead of configuring as a multipolygon uses '|' in the coordstirng to denote a newlist
 	polygon area this abstraction allows for polygon usage and know need for a make_multipolygon()
 	function when it really doesn't do much.
@@ -729,17 +752,21 @@ def make_polygons(data,filename,**kwargs):
 	mask = False
 	boundsbool = False
 	linebool = False
+	test = False
 	for key,value in kwargs.iteritems():
 		if 'mask' == key:
 			mask = value
 		if 'linebool' == key:
 			linebool = value
+		if 'test' == key:
+			test = value
+
 
 	# converting string to utf-8 if not already
 	data['COORDS'] = data['COORDS'].str.encode('utf-8')
 
 	# creating polygon dataframe
-	data = create_polygon_dataframe(data)
+	data = _create_polygon_dataframe(data)
 
 
 	# checking for the bounds bool
@@ -798,14 +825,17 @@ def make_polygons(data,filename,**kwargs):
 		total = total.replace('"@bounds@','')
 		total = total.replace('@bounds@"','')
 
-	with open(filename,'wb') as f:
-		f.write(total)
-	print 'Wrote %s filename to geojson file.' % filename
+	if test == False:
+		with open(filename,'wb') as f:
+			f.write(total)
+		print 'Wrote %s filename to geojson file.' % filename
+	elif test == True:
+		return total
 
 	# handling if a styling mask will be used
 	if mask == True:
 		firstbounds = get_first_bounds(data,'polygons')
-		sniff_mask_fields(data,'postgis_polygons',filename,firstbounds)
+		_sniff_mask_fields(data,'postgis_polygons',filename,firstbounds)
 
 
 	
