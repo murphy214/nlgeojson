@@ -384,6 +384,25 @@ def _create_polygon_dataframe(data,idfield='AREA'):
 
 	return dummydf
 
+# gets the shape type of a geodataframe
+def _get_shapetype(geometry):
+	geometry = str(type(geometry))
+	if 'LineString' in geometry:
+		return 'lines'		
+	elif 'Polygon' in geometry:
+		return 'polygons'
+	elif 'Point' in geometry:
+		return 'points'
+
+
+# given a point1 x,y and a point2 x,y returns distance in miles
+# points are given in long,lat geospatial cordinates
+def _distance(point1,point2):
+	point1 = np.array(point1)
+	point2 = np.array(point2)
+	return np.linalg.norm(point1-point2)
+
+
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
 def make_blocks(data,filename,**kwargs):
@@ -837,5 +856,109 @@ def make_polygons(data,filename,**kwargs):
 		firstbounds = get_first_bounds(data,'polygons')
 		_sniff_mask_fields(data,'postgis_polygons',filename,firstbounds)
 
+
+def geodf_to_nldf(data,filename=False):
+	""" From a geodataframe from geopandas returns a nlgeojson usable dataframe.
+	(SEE NOTES.)
+
+	Args:
+		data: a geodataframe with consitantly typed shapes (i.e. eithe all points, all lines, or all polygons)
+		filename: the outfile csv name if desired
+	Returns:
+		Either a nlgeojson dataframe or a nothing if written to disk.
+
+	"""
+	# getting the geometry
+	geometry = data['geometry'].values.tolist()
+	
+	# getting the actual dataframe chunk
+	newlist = []
+	for i in data.columns:
+		if not i == 'geometry':
+			newlist.append(i)
+	
+	# getting all but the geometry
+	data = data[newlist]
+	
+	# getting type
+	shapetype = _get_shapetype(geometry[0])
+
+	# logic for making a lines df
+	if shapetype == 'lines':
+		boolthing = False
+		for i in data.columns:
+			if 'gid' == i:
+				boolthing = True
+		if boolthing == False:
+			data['gid'] = range(len(data))
+
+		newlist = []
+		count = 0
+		for i in geometry:
+			count += 1
+			west,south,east,north = i.bounds 
+			coords = []
+			count = 0
+			totaldistance = 0.
+			for point in i.coords:
+				if count == 0:
+					count = 1
+				else:
+					dist = _distance(oldpoint,point)
+					totaldistance += dist
+				oldpoint = point
+				coords.append([point[0],point[1]])
+
+			newgeometries = '[%s]' % coords
+			newlist.append([west,south,east,north,str(coords),totaldistance])
+		newcolumns = ['WEST','SOUTH','EAST','NORTH','COORDS','MAXDISTANCE']
+		data[newcolumns] = pd.DataFrame(newlist,columns=newcolumns)
+	# logic for making a points df
+	elif shapetype == 'points':
+		newlist = []
+		for i in geometry:
+			newlist.append(i.coords[0])
+		data[['LONG','LAT']] = pd.DataFrame(newlist,columns=['LONG','LAT'])
+	# logic for making a polygons df
+	elif shapetype == 'polygons':
+		boolthing = False
+		for i in data.columns:
+			if 'AREA' == i:
+				boolthing = True
+		if boolthing == False:
+			data['AREA'] = range(len(data))
+
+		newlist = []
+		count = 0
+		ids = []
+		for eacharea in geometry:
+			geoms = []
+			if 'MultiPolygon' in str(type(eacharea)):		
+				for eachgeom in list(eacharea.geoms):
+					exterior = str([list(i) for i in list(eachgeom.exterior.coords)])
+					interior = str([(list([list(ii) for ii in list(i.coords)])) for i in list(eachgeom.interiors)])[1:-1]
+					total = '[%s,%s]' % (exterior,interior)
+					if total[-2] == ',':
+						total = total[:-2] + ']'				
+					geoms.append(total)
+				total = '|'.join(geoms)
+			else:
+				exterior = str([list(i) for i in list(eacharea.exterior.coords)])
+				interior = str([(list([list(ii) for ii in list(i.coords)])) for i in list(eacharea.interiors)])[1:-1]
+				total = '[%s,%s]' % (exterior,interior)
+				
+				if total[-2] == ',':
+					total = total[:-2] + ']'
+
+			newlist.append(total)
+			count += 1
+
+		data['COORDS'] = newlist
+
+	# outputting to csv if filename is input
+	if not filename == False:
+		data.to_csv(filename,index=False,encoding='utf-8')
+	else:
+		return data
 
 	
