@@ -1,23 +1,46 @@
 # nlgeojson - Next Level Geojson Abstractions off Pandas DataFrames 
- Pandas DF to geojson implementation.
+**Fastest Pandas DF to geojson implementation.**
 
-Basically this module mimics a lot of the functionality of one of my older modules but its a tenth of size and the complexity as well orders of magnitudes faster.
+# What is it?
+Nlgeojson is a module that parses raw json using a vanilla pandas dataframe to make parsing geojson as fast as possible. Often times when doing data analysis the geometry isn't explicitly required within the actual analysis so formatting a dataframe to take advantage of this fact allows you to skip things like hard serialization of json object as dictionary objects in python which get you massive speedups when taking into account we can use to the to_json() method off the dataframe to get out a string representation of the properties. 
+
+**Basically this module parses geojson anywhere from 30-80x times faster then normal json serialization making data visualization, algorithm prototyping, and anything else much much easier.** 
+
+#### Output Benchmarks can be seen below:
+![](https://cloud.githubusercontent.com/assets/10904982/22404494/e74c89b0-e5ff-11e6-92c3-f628cda9a6ae.png)
+
+# What about just using Geopandas?
 
 Geopandas exists to provide geospatial abstractions / methods in a pandas dataframe with geojson objects with shapely coordinate structures handling the work for it on the back end, this is done typically by reading in a geospatial file or manipulating fields to create more geospatial objects. Its nice, however, the geojson representation in memory for objects is unnecessary for a lot of applications,when most people only use a few methods at best.
 
+Basically if you output the vanilla nl formatted dataframe to csv it will make both reading in the geometry / writing out geojson much faster and easier to work with. 
 
-# TL;DR
-In short often times we don't care about the nature of the geospatial objects involved within our analysis. Really we only need two representions of our objects a index or geospatial representation, and a sparse bare bones flat representation with nothing "geo" about it at all. This sparse representation is a regular dataframe that exist solely for spatial joins of aggregated or related fields. 
+**So when comparing the heaviness of geopandas > pandas > shapely represented as a geojson to manage the extra state, its often times unnecessary, however, geodf_to_nldf() function can be used to convert a geodataframe into a nldataframe representation that can be output to a csv file.**
 
-So when comparing the heaviness of geopandas > pandas > shapely represented as a geojson to manage the extra state, its heavy.
 
-If we need to relate a point to a line or a point to a polygon I use [ult](https://github.com/murphy214/ult) its much faster and breaks up analysis into defined sections point relation, point aggregation, than joining. Ult creates the second type of representation we need a spatial index.
+# Example Code / Usage
+```python
+import pandas as pd
+import geopandas as gpd
+import nlgeojson as nl
+import pipeleaflet as pl
 
-So it makes logical sense to bring only what we need in a dataframe (nothing more) to parse into output geojson when doing geospatial aggregations and joins. Making reading, manipulating, and 
-writing out to geojson geometries much much easier, as well as [faster](https://github.com/murphy214/nlgeojson/blob/master/demo.ipynb)
+# reading into memory a counties shapefile
+data = gpd.read_file('example_shp/cb_2015_us_county_500k.shp')
 
-# Small caveat
-This module assumes you know the type of geometry your dataframe is representing by sending it in to the correct function. (i.e. make_lines,make_points,make_blocks,make_polygons) 
+# making the nldataframe the geodataframe
+# and creating counties csv file now red
+data = nl.geodf_to_nldf(data,filename='counties.csv')
 
-## Please take a look at this [ipynb](https://github.com/murphy214/nlgeojson/blob/master/demo.ipynb) for the performance advantages and the unique syntax it uses.
+# reading in the csv just made and adding a colorkey field
+data = pd.read_csv('counties.csv')
+
+# writing out the geojson file
+nl.make_polygons(data,'polygons.geojson')
+
+# creating map visualization
+#pl.b()
+```
+## Output Can be Seen Below
+![](https://cloud.githubusercontent.com/assets/10904982/22404535/a643bb22-e600-11e6-8451-f0ac7c4ad112.png)
 
