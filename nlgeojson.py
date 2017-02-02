@@ -1,9 +1,12 @@
+import sys
+from future.utils import bytes_to_native_str as n
 import numpy as np
 import geohash
 import json
 import itertools
 import time
 import pandas as pd
+import future
 
 # makes the cordinates for each set of pointss
 def _make_coord(data,latlongheaders):
@@ -271,7 +274,8 @@ def get_first_bounds(data,type,pipegl=False):
 		bounds = bounds[0]
 		bounds = bounds[1:-1]
 		bounds = bounds.encode('utf-8')
-		bounds = str.split(bounds,'],')[0]
+
+		bounds = str.split(n(bounds),'],')[0]
 		bounds = bounds[1:]
 		long,lat = str.split(bounds,',')
 		long,lat = float(long),float(lat)
@@ -280,6 +284,7 @@ def get_first_bounds(data,type,pipegl=False):
 		if pipegl == True:
 			long = data['LONG'][:1].values.tolist()[0]
 			lat = data['LAT'][:1].values.tolist()[0]
+		
 		else:
 			bounds = data['coord'][:1].values.tolist()[0]
 			long,lat = str.split(bounds[1:-1],',')
@@ -293,6 +298,7 @@ def get_first_bounds(data,type,pipegl=False):
 			lat,long = data[['NORTH','EAST']][:1].values.tolist()[0]
 		return [long,lat]
 	if type == 'polygons':
+		print(data)
 		bounds = data.iloc[0]['COORDS']
 		bounds = bounds[2:-2]
 		bounds = str.split(bounds,'],[')
@@ -359,9 +365,9 @@ def _sniff_mask_fields(data,type,filename,firstbound):
 	filename = str.split(str(filename),'.')[0]
 	filename = filename + '.json'
 
-	with open(filename,'wb') as newgeojson:
+	with open(filename,'w') as newgeojson:
 		json.dump(maskjson,newgeojson)
-	print 'Wrote %s to json.' % filename
+	#print('Wrote %s to json.' % filename)
 
 	data.columns = newcolumns
 	
@@ -371,6 +377,7 @@ def _sniff_mask_fields(data,type,filename,firstbound):
 def _create_polygon_dataframe(data,idfield='AREA'):
 	# creating dummy datafrrame
 	dummydf = pd.DataFrame(data.COORDS.str.split('|').tolist(), index=data.AREA).stack()
+
 	dummydf = dummydf.reset_index()
 	dummydf = dummydf[['AREA',0]]
 	dummydf.columns = ['AREA','COORDS']
@@ -429,7 +436,7 @@ def make_blocks(data,filename,**kwargs):
 	bounds = False
 	cardinals = False
 	test = False
-	for key,value in kwargs.iteritems():
+	for key,value in kwargs.items():
 		if key == 'mask':
 			mask = value
 		if key == 'bounds':
@@ -473,7 +480,7 @@ def make_blocks(data,filename,**kwargs):
 
 	newlist = []
 	count = 0
-	for coord,props in itertools.izip(coords,properties):
+	for coord,props in zip(coords,properties):
 		if count == 0:
 			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
 		elif count == len(properties)-1:
@@ -495,9 +502,9 @@ def make_blocks(data,filename,**kwargs):
 		total = total.replace('@bounds@"','')
 
 	if test == False:
-		with open(filename,'wb') as f:
+		with open(filename,'w') as f:
 			f.write(total)
-		print 'Wrote %s filename to geojson file.' % filename
+		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
 
@@ -533,7 +540,7 @@ def make_lines(data,filename,**kwargs):
 	boundsbool = False
 	linebool = False
 	test = False
-	for key,value in kwargs.iteritems():
+	for key,value in kwargs.items():
 		if 'mask' == key:
 			mask = value
 		if 'linebool' == key:
@@ -574,7 +581,7 @@ def make_lines(data,filename,**kwargs):
 
 	newlist = []
 	count = 0
-	for coord,props in itertools.izip(coords,properties):
+	for coord,props in zip(coords,properties):
 		if count == 0:
 			line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
 		elif count == len(properties)-1:
@@ -598,9 +605,9 @@ def make_lines(data,filename,**kwargs):
 		return total[:-6]
 
 	if test == False:
-		with open(filename,'wb') as f:
+		with open(filename,'w') as f:
 			f.write(total)
-		print 'Wrote %s filename to geojson file.' % filename
+		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
 
@@ -627,7 +634,7 @@ def make_line(data,filename,**kwargs):
  	"""
 	mask = False
 	test = False
-	for key,value in kwargs.iteritems():
+	for key,value in kwargs.items():
 		if 'mask' == key:
 			mask = value
 		if 'test' == key:
@@ -647,9 +654,9 @@ def make_line(data,filename,**kwargs):
 	total = total + '}}]}'
 
 	if test == False:
-		with open(filename,'wb') as f:
+		with open(filename,'w') as f:
 			f.write(total)
-		print 'Wrote %s filename to geojson file.' % filename
+		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
 
@@ -681,7 +688,7 @@ def make_points(data,filename,**kwargs):
 	latlongheaders = False
 	bounds = False
 	test = False
-	for key,value in kwargs.iteritems():
+	for key,value in kwargs.items():
 		if key == 'mask':
 			mask = value
 		if key == 'latlongheaders':
@@ -704,7 +711,7 @@ def make_points(data,filename,**kwargs):
 	properties = str.split(properties[1:-1],'},')
 	newlist = []
 	count = 0
-	for coord,props in itertools.izip(coords,properties):
+	for coord,props in zip(coords,properties):
 		if count == 0:
 			pointline = '''{"geometry": {"type": "Point", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
 			#line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
@@ -730,9 +737,9 @@ def make_points(data,filename,**kwargs):
 		total = total.replace('/bounds/"','')
 
 	if test == False:
-		with open(filename,'wb') as f:
+		with open(filename,'w') as f:
 			f.write(total)
-		print 'Wrote %s filename to geojson file.' % filename
+		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
 
@@ -772,7 +779,7 @@ def make_polygons(data,filename,**kwargs):
 	boundsbool = False
 	linebool = False
 	test = False
-	for key,value in kwargs.iteritems():
+	for key,value in kwargs.items():
 		if 'mask' == key:
 			mask = value
 		if 'linebool' == key:
@@ -782,11 +789,11 @@ def make_polygons(data,filename,**kwargs):
 
 
 	# converting string to utf-8 if not already
-	data['COORDS'] = data['COORDS'].str.encode('utf-8')
+	#data['COORDS'] = data['COORDS'].str.encode('utf-8')
 
 	# creating polygon dataframe
 	data = _create_polygon_dataframe(data)
-
+	print(data,'polygondf')
 
 	# checking for the bounds bool
 	for row in data.columns.values.tolist():
@@ -820,7 +827,7 @@ def make_polygons(data,filename,**kwargs):
 
 	newlist = []
 	count = 0
-	for coord,props in itertools.izip(coords,properties):
+	for coord,props in zip(coords,properties):
 		if count == 0:
 			line = '''{"geometry": {"type": "Polygon", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props[1:]+'}')
 		elif count == len(properties)-1:
@@ -845,9 +852,9 @@ def make_polygons(data,filename,**kwargs):
 		total = total.replace('@bounds@"','')
 
 	if test == False:
-		with open(filename,'wb') as f:
+		with open(filename,'w') as f:
 			f.write(total)
-		print 'Wrote %s filename to geojson file.' % filename
+		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
 
@@ -913,6 +920,7 @@ def geodf_to_nldf(data,filename=False):
 			newlist.append([west,south,east,north,str(coords),totaldistance])
 		newcolumns = ['WEST','SOUTH','EAST','NORTH','COORDS','MAXDISTANCE']
 		data[newcolumns] = pd.DataFrame(newlist,columns=newcolumns)
+	
 	# logic for making a points df
 	elif shapetype == 'points':
 		newlist = []
