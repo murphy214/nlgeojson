@@ -7,6 +7,7 @@ import itertools
 import time
 import pandas as pd
 import future
+import geopandas as gpd
 
 # makes the cordinates for each set of pointss
 def _make_coord(data,latlongheaders):
@@ -298,10 +299,15 @@ def get_first_bounds(data,type,pipegl=False):
 			lat,long = data[['NORTH','EAST']][:1].values.tolist()[0]
 		return [long,lat]
 	if type == 'polygons':
-		print(data)
 		bounds = data.iloc[0]['COORDS']
 		bounds = bounds[2:-2]
-		bounds = str.split(bounds,'],[')
+		
+		# logic for bounds spacing
+		if ' ' in bounds:
+			bounds = str.split(bounds,'], [')
+		else: 
+			bounds = str.split(bounds,'],[')
+
 		long,lat = str.split(bounds[0][1:],',')
 		long,lat = 	float(long),float(lat)
 		return [long,lat]
@@ -415,15 +421,12 @@ def _distance(point1,point2):
 def make_blocks(data,filename,**kwargs):
 	""" Creates and writes blocks geojson from either geohashs or extrema columns.
 	(SEE NOTES.)
-
 	Args:
 		data: a dataframe with a properly configured coords column (SEE NOTES)
 		filename: the filename of either geojson or kml filetype
 		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
-
 	Returns:
 		Writes a geojson file to disk
-
 	NOTES: This function accepts two types of input column(s). Either a 'GEOHASH' column
 	which will decode your square within the function. Or having the fields:
 	'NORTH','SOUTH','EAST','WEST' in your dataframe is also acceptable.
@@ -519,19 +522,20 @@ def make_blocks(data,filename,**kwargs):
 def make_lines(data,filename,**kwargs):
 	""" Creates and writes lines geojson from a postgis / coords table.
 	(SEE NOTES.)
-
 	Args:
 		data: a dataframe with a properly configured coords column (SEE NOTES)
 		filename: the filename of either geojson or kml filetype
 		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
-
 	Returns:
 		Writes a geojson file to disk
-
 	NOTES: This function uses the coords column or a column using postgis st_asewkt function as
 	your column title to extract coordinates for just place them in cleanly if your coordinates are already in
 	[[x1,y1],[x2,y2]] format within a string.
  	"""
+
+	# fixing geopandas if applicable
+	data = fix_geopandas(data)
+
 	# lazy
 	if filename == '':
 		filename = 'lines.geojson'
@@ -620,18 +624,18 @@ def make_lines(data,filename,**kwargs):
 def make_line(data,filename,**kwargs):
 	""" Creates and writes line geojson from either geohashs or extrema columns.
 	(SEE NOTES.)
-
 	Args:
 		data: a dataframe with a properly configured lat/long fields (SEE NOTES)
 		filename: the filename of either geojson or kml filetype
 		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
-
 	Returns:
 		Writes a geojson file to disk
-
 	NOTES: This function creates a single line from the LAT / LONG fields and carries
 	repeated fields into the geojson.
  	"""
+	# fixing geopandas if applicable
+	data = fix_geopandas(data)
+
 	mask = False
 	test = False
 	for key,value in kwargs.items():
@@ -669,18 +673,19 @@ def make_line(data,filename,**kwargs):
 def make_points(data,filename,**kwargs):
 	""" Creates and writes points geojson from LAT and LONG FIELDS.
 	(SEE NOTES.)
-
 	Args:
 		data: a dataframe with a properly configured lat/long column (SEE NOTES)
 		filename: the filename of either geojson or kml filetype
 		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
-
 	Returns:
 		Writes a geojson file to disk
-
 	NOTES: This function searches each column header for fields that look 'LAT' or
 	'LONG' respectively to create a point from the dataframe input.
  	"""
+	# fixing geopandas if applicable
+	data = fix_geopandas(data)
+
+
 	# lazy
 	if filename == '':
 		filename = 'points.geojson'
@@ -755,15 +760,12 @@ def make_points(data,filename,**kwargs):
 def make_polygons(data,filename,**kwargs):
 	""" Creates and writes polygonstring for geojson from a polygon flat table.
 	(SEE NOTES.)
-
 	Args:
 		data: a dataframe with a properly configured coords column (SEE NOTES)
 		filename: the filename of either geojson or kml filetype
 		*mask: kwarg that writes a json mask for output geojson for quick html parsing.
-
 	Returns:
 		Writes a geojson file to disk
-
 	NOTES: This function accepts a flat dataframe output from polygon index
 	which has a column configured like normal geojson coordinates as a _stringify
 	but instead of configuring as a multipolygon uses '|' in the coordstirng to denote a newlist
@@ -771,6 +773,11 @@ def make_polygons(data,filename,**kwargs):
 	function when it really doesn't do much.
 	"""
 	# lazy
+
+	# fixing geopandas if applicable
+	data = fix_geopandas(data)
+
+
 	if filename == '':
 		filename = 'polygons.geojson'
 
@@ -793,7 +800,6 @@ def make_polygons(data,filename,**kwargs):
 
 	# creating polygon dataframe
 	data = _create_polygon_dataframe(data)
-	print(data,'polygondf')
 
 	# checking for the bounds bool
 	for row in data.columns.values.tolist():
@@ -867,13 +873,11 @@ def make_polygons(data,filename,**kwargs):
 def geodf_to_nldf(data,filename=False):
 	""" From a geodataframe from geopandas returns a nlgeojson usable dataframe.
 	(SEE NOTES.)
-
 	Args:
 		data: a geodataframe with consitantly typed shapes (i.e. eithe all points, all lines, or all polygons)
 		filename: the outfile csv name if desired
 	Returns:
 		Either a nlgeojson dataframe or a nothing if written to disk.
-
 	"""
 	# getting the geometry
 	geometry = data['geometry'].values.tolist()
@@ -969,4 +973,9 @@ def geodf_to_nldf(data,filename=False):
 	else:
 		return data
 
-	
+# converts a geopandas dataframe to nlgeojson dataframe
+def fix_geopandas(data):
+	if isinstance(data,gpd.GeoDataFrame) == True:
+		return geodf_to_nldf(data)
+	else:
+		return data
