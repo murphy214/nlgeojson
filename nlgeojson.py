@@ -439,6 +439,7 @@ def make_blocks(data,filename,**kwargs):
 	bounds = False
 	cardinals = False
 	test = False
+	tilebool = False
 	for key,value in kwargs.items():
 		if key == 'mask':
 			mask = value
@@ -451,6 +452,13 @@ def make_blocks(data,filename,**kwargs):
 	for row in data.columns.values.tolist():
 		if str(row).lower() == 'north':
 			cardinals = True
+		if str(row).lower() == 'xyz':
+			# nto a good place at all to put it but trying to avoid 
+			# circular imports if at all possible
+			from mapkit import map_cards
+			data = map_cards(data)
+			tilebool = True
+
 
 
 
@@ -464,6 +472,8 @@ def make_blocks(data,filename,**kwargs):
 	else:
 		if cardinals == True:
 			data = _get_alignment_cardinals(data)
+		elif tilebool == True:
+			pass
 		else:
 			data['COORDS'] = data['GEOHASH'].map(_get_alignment_geohash)
 
