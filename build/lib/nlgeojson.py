@@ -8,6 +8,7 @@ import time
 import pandas as pd
 import future
 import geopandas as gpd
+import mercantile
 
 # makes the cordinates for each set of pointss
 def _make_coord(data,latlongheaders):
@@ -296,7 +297,13 @@ def get_first_bounds(data,type,pipegl=False):
 			ghash = data['GEOHASH'][:1].values.tolist()[0]
 			lat,long = geohash.decode(ghash)
 		except:
-			lat,long = data[['NORTH','EAST']][:1].values.tolist()[0]
+			try:
+				xyz = data['XYZ'].iloc[0]
+				x,y,z = str.split(xyz,'/')
+				bds = mercantile.bounds(int(x),int(y),int(z))
+				long,lat = bds.east,bds.north
+			except:
+				lat,long = data[['NORTH','EAST']][:1].values.tolist()[0]
 		return [long,lat]
 	if type == 'polygons':
 		bounds = data.iloc[0]['COORDS']
@@ -989,3 +996,7 @@ def fix_geopandas(data):
 		return geodf_to_nldf(data)
 	else:
 		return data
+
+
+
+
