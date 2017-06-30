@@ -11,11 +11,10 @@ Nlgeojson is a module that parses raw json using a vanilla pandas dataframe to m
 
 # What about just using Geopandas?
 
-Geopandas exists to provide geospatial abstractions / methods in a pandas dataframe with geojson objects with shapely coordinate structures handling the work for it on the back end, this is done typically by reading in a geospatial file or manipulating fields to create more geospatial objects. Its nice, however, the geojson representation in memory for objects is unnecessary for a lot of applications,when most people only use a few methods at best.
+Geopandas exists to provide geospatial abstractions / methods in a pandas dataframe with geojson objects with shapely coordinate structures handling the work for it on the back end, this is done typically by reading in a geospatial file or manipulating fields to create more geospatial objects.
 
 Basically if you output the vanilla nl formatted dataframe to csv it will make both reading in the geometry / writing out geojson much faster and easier to work with. 
 
-**So when comparing the heaviness of geopandas > pandas > shapely represented as a geojson to manage the extra state, its often times unnecessary, however, geodf_to_nldf() function can be used to convert a geodataframe into a nldataframe representation that can be output to a csv file.**
 
 
 # Example Code / Usage
