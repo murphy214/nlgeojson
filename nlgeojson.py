@@ -780,6 +780,7 @@ def make_points(data,filename,raw=False,**kwargs):
 			#line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
 		count += 1
 		newlist.append(pointline)
+	middle = '.'.join(newlist)
 	if raw == False:
 		# start of the geojson
 		start = '{"type": "FeatureCollection", "features": ['
