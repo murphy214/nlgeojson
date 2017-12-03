@@ -9,6 +9,8 @@ import pandas as pd
 import future
 import geopandas as gpd
 import mercantile
+from shapely.geometry import mapping
+
 
 # makes the cordinates for each set of pointss
 def _make_coord(data,latlongheaders):
@@ -386,23 +388,34 @@ def _sniff_mask_fields(data,type,filename,firstbound):
 	
 	return data,geoms
 
+
+
 # creates a polygon dataframe ready to be used by nlgeojson
 def _create_polygon_dataframe(data,idfield='AREA'):
-	# creating dummy datafrrame
-	dummydf = pd.DataFrame(data.COORDS.str.split('|').tolist(), index=data.AREA).stack()
 
-	dummydf = dummydf.reset_index()
-	dummydf = dummydf[['AREA',0]]
-	dummydf.columns = ['AREA','COORDS']
+	# grabbing only part of df needed
+	tempdf = data[data['COORDS'].str.contains('|',regex=False) == True]
+	data = data[data['COORDS'].str.contains('|',regex=False) == False]
 
-	# setting the index and slicing correct data
-	data = data.set_index(idfield)
-	data = data.drop('COORDS',axis=1).loc[dummydf.AREA.values]
 
-	# setting the values from the index and dropping the index
-	dummydf[data.columns] = data.reset_index().drop('AREA',axis=1)
+	if len(tempdf) != 0:
+		dummydf = pd.DataFrame(tempdf.COORDS.str.split('|').tolist(), index=tempdf.AREA).stack()
 
-	return dummydf
+		dummydf = dummydf.reset_index()
+		dummydf = dummydf[['AREA',0]]
+		dummydf.columns = ['AREA','COORDS']
+
+		# setting the index and slicing correct tempdf
+		tempdf = tempdf.set_index(idfield)
+		tempdf = tempdf.drop('COORDS',axis=1).loc[dummydf.AREA.values]
+
+		# setting the values from the index and dropping the index
+		dummydf[tempdf.columns] = tempdf.reset_index().drop('AREA',axis=1)
+
+
+
+		data = pd.concat([data,dummydf],ignore_index=True)
+	return data
 
 # gets the shape type of a geodataframe
 def _get_shapetype(geometry):
@@ -425,7 +438,7 @@ def _distance(point1,point2):
 
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
-def make_blocks(data,filename,**kwargs):
+def make_blocks(data,filename,raw=False,**kwargs):
 	""" Creates and writes blocks geojson from either geohashs or extrema columns.
 	(SEE NOTES.)
 	Args:
@@ -454,6 +467,10 @@ def make_blocks(data,filename,**kwargs):
 			bounds = value
 		if 'test' == key:
 			test = value
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'blocks')		
+		_sniff_mask_fields(data,'blocks',filename,firstbounds)
 
 	# testing for north east, south cardinal directonals
 	for row in data.columns.values.tolist():
@@ -513,30 +530,32 @@ def make_blocks(data,filename,**kwargs):
 		
 
 	middle = ', '.join(newlist)
-	total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
 
+	if raw == False:
+		total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
+	else:
+		total = middle
 
 	# replacing thte bounds signitaures made earlier
 	if bounds == True:
 		total = total.replace('"@bounds@','')
 		total = total.replace('@bounds@"','')
 
-	if test == False:
+	if test == False and raw == False:
 		with open(filename,'w') as f:
 			f.write(total)
 		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
+	elif raw == True:
+		return total
 
-	# handling if a styling mask will be used
-	if mask == True:
-		firstbounds = get_first_bounds(data,'blocks')		
-		_sniff_mask_fields(data,'blocks',filename,firstbounds)
+
 	
 
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
-def make_lines(data,filename,**kwargs):
+def make_lines(data,filename,raw=False,**kwargs):
 	""" Creates and writes lines geojson from a postgis / coords table.
 	(SEE NOTES.)
 	Args:
@@ -568,6 +587,10 @@ def make_lines(data,filename,**kwargs):
 			linebool = value
 		if 'test' == key:
 			test = value
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'blocks')		
+		_sniff_mask_fields(data,'blocks',filename,firstbounds)
 
 	# checking for the bounds bool
 	for row in data.columns.values.tolist():
@@ -582,13 +605,14 @@ def make_lines(data,filename,**kwargs):
 
 	newheaders = []
 	stbool = False
-	coordsbool = False
+	coordsbool,coordsheader = False,''
 	# removing fields that don't matter
 	for row in data.columns.values.tolist():
 		if not row == 'geom' and not row == 'coords' and not 'st_asewkt' == row:
 			newheaders.append(row)
-		if row == 'coords':
+		if row.lower() == 'coords':
 			coordsbool = True
+			coordsheader = row
 		if row == 'st_asewkt':
 			stbool = True
 
@@ -596,7 +620,7 @@ def make_lines(data,filename,**kwargs):
 	properties = data[newheaders].to_json(orient='records')
 	properties = str.split(properties,'},')
 	if coordsbool == True:
-		coords = data['coords'].values.tolist()
+		coords = data[coordsheader].values.tolist()
 	elif coordsbool == False and stbool == True:
 		coords = _get_aligns(data)
 
@@ -614,7 +638,12 @@ def make_lines(data,filename,**kwargs):
 		newlist.append(line)
 
 	middle = ', '.join(newlist)
-	total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
+
+
+	if raw == True:
+		total = middle
+	else:
+		total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
 
 	# replacing thte bounds signitaures made earlier
 	if boundsbool == True:
@@ -625,13 +654,14 @@ def make_lines(data,filename,**kwargs):
 	if linebool == True:
 		return total[:-6]
 
-	if test == False:
+	if test == False and raw == False:
 		with open(filename,'w') as f:
 			f.write(total)
 		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
-
+	if raw == True:
+		return total
 	# handling if a styling mask will be used
 	if mask == True:
 		firstbounds = get_first_bounds(data,'lines')
@@ -687,7 +717,7 @@ def make_line(data,filename,**kwargs):
 		_sniff_mask_fields(data,'postgis_lines',filename,firstbounds)
 
 # makes points using text sequences
-def make_points(data,filename,**kwargs):
+def make_points(data,filename,raw=False,**kwargs):
 	""" Creates and writes points geojson from LAT and LONG FIELDS.
 	(SEE NOTES.)
 	Args:
@@ -720,6 +750,11 @@ def make_points(data,filename,**kwargs):
 		if 'test' == key:
 			test = value
 
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'points')		
+		_sniff_mask_fields(data,'points',filename,firstbounds)
+
 	# filling in all missing data in df
 	data = data.fillna(value=0)
 
@@ -745,36 +780,36 @@ def make_points(data,filename,**kwargs):
 			#line = '''{"geometry": {"type": "LineString", "coordinates": %s}, "type": "Feature", "properties": %s}''' % (coord,props+'}')
 		count += 1
 		newlist.append(pointline)
+	if raw == False:
+		# start of the geojson
+		start = '{"type": "FeatureCollection", "features": ['
 
-	# start of the geojson
-	start = '{"type": "FeatureCollection", "features": ['
+		# creating middle from the newlist
 
-	# creating middle from the newlist
-	middle = ', '.join(newlist)
+		total = start + middle + ']}' 
+	else:
+		middle = ', '.join(newlist)
 
-	total = start + middle + ']}' 
+		total = middle
 
 	if bounds == True:
 		total = total.replace('"/bounds/','')
 		total = total.replace('/bounds/"','')
 
-	if test == False:
+	if test == False and raw == False:
 		with open(filename,'w') as f:
 			f.write(total)
 		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
-
-	# handling if a styling mask will be used
-	if mask == True:
-		firstbounds = get_first_bounds(data,'points')		
-		_sniff_mask_fields(data,'points',filename,firstbounds)
+	elif raw == True:
+		return total
 
 
 
 # given a dataframe containg the geometry coords 
 # writes a geojson file out from text
-def make_polygons(data,filename,**kwargs):
+def make_polygons(data,filename,raw=False,**kwargs):
 	""" Creates and writes polygonstring for geojson from a polygon flat table.
 	(SEE NOTES.)
 	Args:
@@ -817,6 +852,11 @@ def make_polygons(data,filename,**kwargs):
 
 	# creating polygon dataframe
 	data = _create_polygon_dataframe(data)
+
+	# handling if a styling mask will be used
+	if mask == True:
+		firstbounds = get_first_bounds(data,'polygons')
+		_sniff_mask_fields(data,'postgis_polygons',filename,firstbounds)
 
 	# checking for the bounds bool
 	for row in data.columns.values.tolist():
@@ -862,7 +902,10 @@ def make_polygons(data,filename,**kwargs):
 		newlist.append(line)
 
 	middle = ', '.join(newlist)
-	total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
+	if raw == True:
+		total = middle
+	else:
+		total = '{"type": "FeatureCollection", "features": [' + middle + ']}'
 
 
 	# logic for if line is true
@@ -874,17 +917,14 @@ def make_polygons(data,filename,**kwargs):
 		total = total.replace('"@bounds@','')
 		total = total.replace('@bounds@"','')
 
-	if test == False:
+	if test == False and raw == False:
 		with open(filename,'w') as f:
 			f.write(total)
 		#print('Wrote %s filename to geojson file.' % filename)
 	elif test == True:
 		return total
-
-	# handling if a styling mask will be used
-	if mask == True:
-		firstbounds = get_first_bounds(data,'polygons')
-		_sniff_mask_fields(data,'postgis_polygons',filename,firstbounds)
+	elif raw == True:
+		return total
 
 
 def geodf_to_nldf(data,filename=False):
@@ -993,10 +1033,49 @@ def geodf_to_nldf(data,filename=False):
 # converts a geopandas dataframe to nlgeojson dataframe
 def fix_geopandas(data):
 	if isinstance(data,gpd.GeoDataFrame) == True:
-		return geodf_to_nldf(data)
+		return geodf2nldf(data)
 	else:
 		return data
 
 
 
+def string_me(geom):
+	geom = str(geom)
+	return geom.replace('(','[').replace(')',']').replace('],]',']]')
+
+def map_me(vals,total):
+	index,geom = vals['index'],vals.geometry
+	mapped = mapping(geom)
+	if mapped['type'] == 'MultiLineString':
+		newvals = [string_me(i) for i in mapped['coordinates']]
+		total += zip([index]*len(newvals),newvals)
+	if mapped['type'] == 'MultiPolygon':
+		newvals = [string_me(i) for i in mapped['coordinates']]
+		total += zip([index]*len(newvals),newvals)
+	if mapped['type'] == 'MultiPoint':
+		newvals = [string_me(i) for i in mapped['coordinates']]
+		total += zip([index]*len(newvals),newvals)
+	if mapped['type'] == 'Point':
+		total += [(index,string_me(mapped['coordinates']))]
+	if mapped['type'] == 'LineString':
+		total += [(index,string_me(mapped['coordinates']))]
+	if mapped['type'] == 'Polygon':
+		total += [(index,string_me(mapped['coordinates']))]
+
+# creating nldf from geodf
+def geodf2nldf(data):
+	# resetting index and shit
+	data = data.to_crs({'init': 'epsg:4326'})
+	datanew = data.reset_index()[['index','geometry']]
+	total = []
+
+	# getting values
+	vals = datanew[['index','geometry']].apply(map_me,total=total,axis=1).values.tolist()
+	datanew = pd.DataFrame(total,columns=['index','COORDS'])
+
+	# adding fields
+	data = data.drop('geometry',axis=1)
+	data = datanew.merge(data,left_on='index',right_index=True)
+	data = data.drop(['index'],axis=1)
+	return data
 
