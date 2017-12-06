@@ -10,7 +10,9 @@ import future
 import geopandas as gpd
 import mercantile
 from shapely.geometry import mapping
-
+import subprocess
+import os
+import io
 
 # makes the cordinates for each set of pointss
 def _make_coord(data,latlongheaders):
@@ -1078,5 +1080,23 @@ def geodf2nldf(data):
 	data = data.drop('geometry',axis=1)
 	data = datanew.merge(data,left_on='index',right_index=True)
 	data = data.drop(['index'],axis=1)
+	return data
+
+# reads a geobuf file
+def read_geobuf(filename):
+	p1 = subprocess.Popen(["read_geobuf", filename], shell=False,stdout=subprocess.PIPE)
+	data = pd.read_csv(p1.stdout,header=None,sep='\t',error_bad_lines=False)
+	data.columns = data.iloc[-1].values.tolist()
+	data = data[:-1]
+	return data
+
+# reads a geojson file
+def read_geojson(filename):
+	if filename.endswith('geobuf'):
+		return read_geobuf(filename)
+	p1 = subprocess.Popen(["read_geojson", filename], shell=False,stdout=subprocess.PIPE)
+	data = pd.read_csv(p1.stdout,header=None,sep='\t',error_bad_lines=False)
+	data.columns = data.iloc[-1].values.tolist()
+	data = data[:-1]
 	return data
 

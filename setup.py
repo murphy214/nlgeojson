@@ -8,7 +8,8 @@ setup(name='nlgeojson',
       author='Bennett Murphy',
       author_email='murphy214@live.marshall.edu',
       url='https://github.com/murphy214/nlgeojson',
-      py_modules=['nlgeojson']
+      py_modules=['nlgeojson'],
+      scripts=['bin/read_geojson','bin/read_geobuf'],
      )
 
 
