@@ -21,13 +21,13 @@ dataframe = nl.read_geojson(geojsonfilename)
 
 # Current implementations require data types to be homogenous
 # make polygons
-mk.make_polygons(dataframe,filename)
+nl.make_polygons(dataframe,filename)
 
 # make lines 
-mk.make_lines(dataframe,filename)
+nl.make_lines(dataframe,filename)
 
 # make points 
-mk.make_points(dataframe,filename)
+nl.make_points(dataframe,filename)
 
 # make_blocks (say if you ahve a geohash column or XYZ tileid column)
 mk.make_blocks(dataframe,filename) # in the implementation is just a polygon but looks for the two fields
