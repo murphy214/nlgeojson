@@ -6,6 +6,33 @@ Nlgeojson is a module that parses raw json using a vanilla pandas dataframe to m
 
 **Basically this module parses geojson anywhere from 30-80x times faster then normal json serialization making data visualization, algorithm prototyping, and anything else much much easier.** 
 
+# Install
+``` 
+pip install git+https://github.com/murphy214/smalltalk
+```
+
+# Main Functions 
+
+```python 
+import nlgeojson as nl
+
+# reading in a geojson
+dataframe = nl.read_geojson(geojsonfilename)
+
+# Current implementations require data types to be homogenous
+# make polygons
+mk.make_polygons(dataframe,filename)
+
+# make lines 
+mk.make_lines(dataframe,filename)
+
+# make points 
+mk.make_points(dataframe,filename)
+
+# make_blocks (say if you ahve a geohash column or XYZ tileid column)
+mk.make_blocks(dataframe,filename) # in the implementation is just a polygon but looks for the two fields
+```
+
 #### Output Benchmarks can be seen below:
 ![](https://cloud.githubusercontent.com/assets/10904982/22404494/e74c89b0-e5ff-11e6-92c3-f628cda9a6ae.png)
 
