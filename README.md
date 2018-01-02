@@ -8,7 +8,7 @@ Nlgeojson is a module that parses raw json using a vanilla pandas dataframe to m
 
 # Install
 ``` 
-pip install git+https://github.com/murphy214/smalltalk
+pip install git+https://github.com/murphy214/nlgeojson
 ```
 
 # Main Functions 
