@@ -10,6 +10,14 @@ setup(name='nlgeojson',
       url='https://github.com/murphy214/nlgeojson',
       py_modules=['nlgeojson'],
       scripts=['bin/read_geojson','bin/read_geobuf'],
+      dependency_links= ['http://github.com/murphy214/pipegeohash/tarball/master#egg=pipegeohash-1.2.0',
+      ],
+	  install_requires=['pandas',
+		'shapely',
+		'geopandas',
+		'mercantile',
+		'future',
+	]
      )
 
 
