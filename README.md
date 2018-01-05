@@ -43,30 +43,6 @@ Geopandas exists to provide geospatial abstractions / methods in a pandas datafr
 Basically if you output the vanilla nl formatted dataframe to csv it will make both reading in the geometry / writing out geojson much faster and easier to work with. 
 
 
-
-# Example Code / Usage
-```python
-import pandas as pd
-import geopandas as gpd
-import nlgeojson as nl
-import pipeleaflet as pl
-
-# reading into memory a counties shapefile
-data = gpd.read_file('example_shp/cb_2015_us_county_500k.shp')
-
-# making the nldataframe the geodataframe
-# and creating counties csv file now red
-data = nl.geodf_to_nldf(data,filename='counties.csv')
-
-# reading in the csv just made and adding a colorkey field
-data = pd.read_csv('counties.csv')
-
-# writing out the geojson file
-nl.make_polygons(data,'polygons.geojson')
-
-# creating map visualization
-#pl.b()
-```
 ## Output Can be Seen Below
 ![](https://cloud.githubusercontent.com/assets/10904982/22404535/a643bb22-e600-11e6-8451-f0ac7c4ad112.png)
 
