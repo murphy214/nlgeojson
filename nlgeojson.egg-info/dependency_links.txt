@@ -1,0 +1,2 @@
+http://github.com/murphy214/pipegeohash/tarball/master#egg=pipegeohash-1.2.0
+http://github.com/hkwi/python-geohash/tarball/master#egg=python-geohash-0.8.5

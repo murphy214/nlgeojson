@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 setup(name='nlgeojson',
       version='1.1',
@@ -11,12 +11,16 @@ setup(name='nlgeojson',
       packages=['nlgeojson'],
       scripts=['bin/read_geojson','bin/read_geobuf'],
       dependency_links= ['http://github.com/murphy214/pipegeohash/tarball/master#egg=pipegeohash-1.2.0',
+      'http://github.com/hkwi/python-geohash/tarball/master#egg=python-geohash-0.8.5',
       ],
-	  install_requires=['pandas',
+	install_requires=['pandas',
 		'shapely',
 		'geopandas',
 		'mercantile',
 		'future',
+            'python-geohash==0.8.5',
+            'pipegeohash==1.2.0',
+
 	]
      )
 
