@@ -493,7 +493,7 @@ def geodf2nldf(data):
 # reads a geobuf file
 def read_geobuf(filename):
 	p1 = subprocess.Popen(["read_geobuf", filename], shell=False,stdout=subprocess.PIPE)
-	data = pd.read_csv(p1.stdout,header=None,sep=',',error_bad_lines=False)
+	data = pd.read_csv(p1.stdout,sep='|',error_bad_lines=False,warn_bad_lines=False)
 	#data.columns = data.iloc[-1].values.tolist()
 	#data = data[:-1]
 	return data

@@ -4,6 +4,7 @@ bin/read_geobuf
 bin/read_geojson
 nlgeojson/__init__.py
 nlgeojson/blocks.py
+nlgeojson/geojson.py
 nlgeojson/lines.py
 nlgeojson/misc.py
 nlgeojson/points.py
