@@ -1,6 +1,6 @@
 Metadata-Version: 1.0
 Name: nlgeojson
-Version: 1.1
+Version: 1.2
 Summary: Next-level geojson parsing using pandas dataframes. SUPERFAST.
 Home-page: https://github.com/murphy214/nlgeojson
 Author: Bennett Murphy

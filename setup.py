@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(name='nlgeojson',
-      version='1.1',
+      version='1.2',
       description="Next-level geojson parsing using pandas dataframes. SUPERFAST.",
       author='Bennett Murphy',
       author_email='murphy214@live.marshall.edu',

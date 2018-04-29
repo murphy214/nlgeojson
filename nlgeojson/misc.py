@@ -447,7 +447,11 @@ def string_me(geom):
 
 def map_me(vals,total):
 	index,geom = vals['index'],vals.geometry
-	mapped = mapping(geom)
+	try:
+		mapped = mapping(geom)
+	except:
+		print 'i pased'
+	#print mapped
 	if mapped['type'] == 'MultiLineString':
 		newvals = [string_me(i) for i in mapped['coordinates']]
 		total += zip([index]*len(newvals),newvals)
@@ -466,7 +470,12 @@ def map_me(vals,total):
 
 # creating nldf from geodf
 def geodf2nldf(data):
+	#print data
 	# resetting index and shit
+	data['BOOL'] = data['geometry'].map(lambda x:str(type(x)) != '''<class 'shapely.geometry.linestring.LineString'>''')
+	data = data[data.BOOL == False]
+
+	data = data.drop('BOOL',axis=1)
 	data = data.to_crs({'init': 'epsg:4326'})
 	datanew = data.reset_index()[['index','geometry']]
 	total = []
@@ -484,9 +493,9 @@ def geodf2nldf(data):
 # reads a geobuf file
 def read_geobuf(filename):
 	p1 = subprocess.Popen(["read_geobuf", filename], shell=False,stdout=subprocess.PIPE)
-	data = pd.read_csv(p1.stdout,header=None,sep='\t',error_bad_lines=False)
-	data.columns = data.iloc[-1].values.tolist()
-	data = data[:-1]
+	data = pd.read_csv(p1.stdout,header=None,sep=',',error_bad_lines=False)
+	#data.columns = data.iloc[-1].values.tolist()
+	#data = data[:-1]
 	return data
 
 # reads a geojson file
