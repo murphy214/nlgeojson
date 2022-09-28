@@ -9,6 +9,7 @@ nlgeojson/lines.py
 nlgeojson/misc.py
 nlgeojson/points.py
 nlgeojson/polygons.py
+nlgeojson/read_write.py
 nlgeojson.egg-info/PKG-INFO
 nlgeojson.egg-info/SOURCES.txt
 nlgeojson.egg-info/dependency_links.txt

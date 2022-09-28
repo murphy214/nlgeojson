@@ -3,5 +3,3 @@ shapely
 geopandas
 mercantile
 future
-python-geohash==0.8.5
-pipegeohash==1.2.0
