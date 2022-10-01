@@ -10,6 +10,7 @@ def write_file(
 		filename, # name of output file
 	):
     """
+    Writes a file with a geometry column
     """
     # fill all missing data in dataframe
     df = df.fillna(value = '')
@@ -26,12 +27,14 @@ def write_file(
     total = '{"type": "FeatureCollection", "features": [' + ','.join(['''{"geometry": %s, "type": "Feature", "properties": %s}}''' % (coord,props) for coord,props in zip(coords,properties)]) + ']}'
 
 	# replacing thte bounds signitaures made earlier
-
     with open(filename,'w') as f:
         f.write(total)
 
 
 def read_file(filename):
+    """
+    Reads a file geojson or file geobuf!
+    """
     result = subprocess.run(['geobuf', 'csv','-f',filename], stdout=subprocess.PIPE)
     df = pd.read_csv(BytesIO(result.stdout))
     return df 
